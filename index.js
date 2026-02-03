@@ -1,7 +1,7 @@
 const { server } = require("./src/server");
 
 server.start("0.0.0.0:50051");
-console.log("🚀 Server running");
+console.log("🚀 Server running: a");
 
 process.on("uncaughtException", (error) => {
   console.log("Server closed because uncaughtException.");
