@@ -1,26 +1,32 @@
-const { server } = require("./src/server");
+const { close, start } = require("./src/server");
 
-server.start("0.0.0.0:50051");
-console.log("🚀 Server running: a");
+start("0.0.0.0:50051")
+  .then(() => console.log("🚀 Server running on 0.0.0.0:50051"))
+  .catch((error) => {
+    console.error("Failed to start server.", error);
+    process.exitCode = 1;
+  });
 
 process.on("uncaughtException", (error) => {
   console.log("Server closed because uncaughtException.");
-  server.close();
-  throw error;
+  close().finally(() => {
+    throw error;
+  });
 });
 
 process.on("unhandledRejection", (reason) => {
   console.log("Server closed because unhandledRejection.");
-  server.close();
-  throw reason;
+  close().finally(() => {
+    throw reason;
+  });
 });
 
 process.on("SIGINT", () => {
   console.log("Server closed because interrupted (SIGINT).");
-  server.close();
+  close();
 });
 
 process.on("SIGTERM", () => {
   console.log("Server closed because terminated (SIGTERM).");
-  server.close();
+  close();
 });

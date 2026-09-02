@@ -1,8 +1,8 @@
 module.exports = {
-  sayHello: (ctx) => {
-    ctx.res = { message: "Hello " + ctx.req.name };
+  sayHello: (call, callback) => {
+    callback(null, { message: "Hello " + call.request.name });
   },
-  sayHi: (ctx) => {
-    ctx.res = { message: "Hi " + ctx.req.name };
+  sayHi: (call, callback) => {
+    callback(null, { message: "Hi " + call.request.name });
   },
 };

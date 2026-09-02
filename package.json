@@ -7,11 +7,9 @@
     "dev": "node src/server.js"
   },
   "dependencies": {
-    "@grpc/proto-loader": "^0.5.5",
-    "grpc": "^1.24.3",
-    "mali": "^0.21.0"
+    "@grpc/grpc-js": "1.13.5",
+    "@grpc/proto-loader": "^0.7.15"
   },
-  "devDependencies": {},
   "author": "",
   "license": "ISC"
 }
