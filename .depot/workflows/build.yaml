@@ -1,3 +1,8 @@
+# Depot CI Migration
+# Source: .github/workflows/build.yaml
+#
+# No changes were necessary.
+
 name: Build
 on:
   push:
@@ -5,7 +10,7 @@ on:
       - "**"
 
 permissions:
-  id-token: write # needed for depot
+  content: read
 
 jobs:
   build:
@@ -13,9 +18,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up Depot CLI
-        uses: depot/setup-action@v1
 
       - name: Create Docker tags and metadata for the API
         id: api-meta
@@ -34,7 +36,7 @@ jobs:
           length: 7
 
       - name: Build
-        uses: depot/bake-action@2a7b3650f132c787714b9f582dc74e154faad669
+        uses: docker/bake-action@v7
         with:
           files: |
             ./docker-bake.hcl
@@ -43,4 +45,3 @@ jobs:
           provenance: mode=max
           sbom: true
           push: false # testing only
-          save: true
