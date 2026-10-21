@@ -1,0 +1,16 @@
+name: Custom event demo
+on:
+  event:
+    types: [hackathon.demo.ping]
+jobs:
+  show_event:
+    runs-on: depot-ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Print the published event
+        env:
+          EVENT_TYPE: ${{ github.event.action }}
+          MESSAGE: ${{ github.event.client_payload.message }}
+        run: |
+          echo "Event type = $EVENT_TYPE"
+          echo "Message = $MESSAGE"
