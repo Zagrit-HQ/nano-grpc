@@ -1,16 +1,19 @@
-name: Custom event demo
+name: Webhook test
+
 on:
-  event:
-    types: [hackathon.demo.ping]
+  repository_dispatch:
+    types: [demo.received]
+    webhook: demo
+
 jobs:
   show_event:
     runs-on: depot-ubuntu-latest
     timeout-minutes: 1
     steps:
-      - name: Print the published event
+      - name: Print the received event
         env:
           EVENT_TYPE: ${{ github.event.action }}
           MESSAGE: ${{ github.event.client_payload.message }}
         run: |
-          echo "Event type = $EVENT_TYPE"
-          echo "Message = $MESSAGE"
+          printf 'Event type = %s\n' "$EVENT_TYPE"
+          printf 'Message = %s\n' "$MESSAGE"
