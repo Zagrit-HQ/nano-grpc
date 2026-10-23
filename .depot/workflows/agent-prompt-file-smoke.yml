@@ -1,0 +1,45 @@
+name: Agent prompt-file smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PROMPT_FILE_CONTEXT: expanded-from-workflow-env
+
+jobs:
+  smoke:
+    timeout-minutes: 3
+    agent:
+      mcp-servers: []
+      prompt-file: .depot/prompts/prompt-file-smoke.md
+      outputs:
+        ok:
+          type: boolean
+        marker:
+          type: string
+        repository:
+          type: string
+        context:
+          type: string
+
+  verify:
+    needs: smoke
+    runs-on: depot-ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Verify the file prompt and its expanded expressions
+        env:
+          SMOKE_OK: ${{ needs.smoke.outputs.ok }}
+          MARKER: ${{ needs.smoke.outputs.marker }}
+          REPOSITORY: ${{ needs.smoke.outputs.repository }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          CONTEXT: ${{ needs.smoke.outputs.context }}
+        run: |
+          test "$SMOKE_OK" = true
+          test "$MARKER" = nano-prompt-file-20261023-8f31c6
+          test "$REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$CONTEXT" = expanded-from-workflow-env
+          printf 'prompt-file smoke passed for %s: %s; %s\n' "$REPOSITORY" "$MARKER" "$CONTEXT"
