@@ -45,14 +45,23 @@ jobs:
         The test job failed for ${{ github.repository }} at ${{ env.SOURCE_SHA }}.
         Clone the repository through Depot's Git gateway into /workspace/test-fix:
           git -c http.extraHeader="x-depot-agent-token: $(curl -fsS "$DEPOT_AGENT_GATEWAY_TOKEN_URL" | jq -er .value)" clone "$DEPOT_AGENT_GATEWAY_URL/github.com/${{ github.repository }}.git" /workspace/test-fix
-        In that directory, check out exactly ${{ env.SOURCE_SHA }} in detached mode.
+        Check out the exact revision in detached mode:
+          git -C /workspace/test-fix checkout --detach ${{ env.SOURCE_SHA }}
         If cloning or checkout fails, return status=blocked and explain why.
 
-        Run npm ci, then npm test to reproduce the failure. If installation fails
-        or tests already pass, return status=blocked with the reason.
+        Each shell tool call starts in the sandbox's original working directory;
+        cd does not persist between calls. Start every repository shell command
+        with cd /workspace/test-fix &&, or use git -C /workspace/test-fix.
+        Use absolute /workspace/test-fix/ paths with file-reading and editing tools.
+        Install and reproduce the failure with:
+          cd /workspace/test-fix && npm ci && npm test
+        If installation fails or tests already pass, return status=blocked with
+        the reason. Before diagnosing a missing file, check pwd and its absolute
+        path inside /workspace/test-fix.
         Make the smallest correction in src/ implementation files. Do not edit
         tests, package manifests, lockfiles, workflows, or other configuration.
-        Do not delete, skip, or weaken tests. Run npm test again in the sandbox.
+        Do not delete, skip, or weaken tests. Validate the fix with:
+          cd /workspace/test-fix && npm test
 
         If tests pass after a nonempty implementation fix, commit only the tracked
         src/ implementation-file changes in one commit. Set the commit author to
