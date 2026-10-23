@@ -1,0 +1,132 @@
+name: Tests
+
+on:
+  push:
+    branches: [codex/agent-smoke]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  SOURCE_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+
+jobs:
+  test:
+    runs-on: depot-ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
+
+  fix-tests:
+    needs: test
+    if: >-
+      failure() && needs.test.result == 'failure' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    agent:
+      mcp-servers: []
+      prompt: |
+        The test job failed for ${{ github.repository }} at ${{ env.SOURCE_SHA }}.
+        Clone the repository through Depot's Git gateway into /workspace/test-fix:
+          git -c http.extraHeader="x-depot-agent-token: $(curl -fsS "$DEPOT_AGENT_GATEWAY_TOKEN_URL" | jq -er .value)" clone "$DEPOT_AGENT_GATEWAY_URL/github.com/${{ github.repository }}.git" /workspace/test-fix
+        Check out the exact revision in detached mode:
+          git -C /workspace/test-fix checkout --detach ${{ env.SOURCE_SHA }}
+        If cloning or checkout fails, return status=blocked and explain why.
+
+        Each shell tool call starts in the sandbox's original working directory;
+        cd does not persist between calls. Start every repository shell command
+        with cd /workspace/test-fix &&, or use git -C /workspace/test-fix.
+        Use absolute /workspace/test-fix/ paths with file-reading and editing tools.
+        Install and reproduce the failure with:
+          cd /workspace/test-fix && npm ci && npm test
+        If installation fails or tests already pass, return status=blocked with
+        the reason. Before diagnosing a missing file, check pwd and its absolute
+        path inside /workspace/test-fix.
+        Make the smallest correction in src/ implementation files. Do not edit
+        tests, package manifests, lockfiles, workflows, or other configuration.
+        Do not delete, skip, or weaken tests. Validate the fix with:
+          cd /workspace/test-fix && npm test
+
+        If tests pass after a nonempty implementation fix, commit only the tracked
+        src/ implementation-file changes in one commit. Set the commit author to
+        github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>.
+        The commit's parent must be exactly ${{ env.SOURCE_SHA }}.
+
+        Push the tested commit only to refs/heads/${{ env.SOURCE_BRANCH }} in this
+        same repository, through the existing gateway remote. Refuse an empty
+        branch name or the default branch (${{ github.event.repository.default_branch }}).
+        Authenticate each remote Git operation with the x-depot-agent-token header
+        fetched from DEPOT_AGENT_GATEWAY_TOKEN_URL, as in the clone command.
+        Immediately before pushing, use git ls-remote to verify that the target
+        branch still points to ${{ env.SOURCE_SHA }}. If it moved, return blocked.
+        Use an ordinary push, never force-push, and do not change another ref.
+        Do not persist the identity token in files, Git configuration, or remotes.
+
+        Return status=fixed and tests_passed=true only after the tested commit has
+        been pushed successfully; set commit_sha to its full 40-character SHA.
+        Otherwise return status=blocked, tests_passed=false, and commit_sha="".
+        Explain the failure or the change, test results, and push in summary.
+        Do not upload artifacts, modify tests, or create or modify pull requests.
+      outputs:
+        status:
+          type: string
+          enum: [fixed, blocked]
+        tests_passed:
+          type: boolean
+        summary:
+          type: string
+        commit_sha:
+          type: string
+          description: Full SHA of the tested and pushed fix commit, or empty when blocked.
+
+  validate-fix:
+    needs: fix-tests
+    if: >-
+      !cancelled() && needs.fix-tests.result == 'success' &&
+      needs.fix-tests.outputs.status == 'fixed' && needs.fix-tests.outputs.tests_passed == 'true'
+    runs-on: depot-ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout the agent's pushed commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.fix-tests.outputs.commit_sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify the agent commit only changes implementation
+        env:
+          FIX_SHA: ${{ needs.fix-tests.outputs.commit_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$FIX_SHA"
+          test "$(git rev-parse HEAD^)" = "$SOURCE_SHA"
+          git diff --exit-code "$SOURCE_SHA" HEAD -- . ':(exclude)src'
+          git diff --exit-code "$SOURCE_SHA" HEAD -- ':(glob)src/**/*.test.js'
+          git diff --check "$SOURCE_SHA" HEAD
+          if git diff --quiet "$SOURCE_SHA" HEAD; then
+            echo "The agent commit made no changes"
+            exit 1
+          fi
+      - name: Verify the fix independently
+        run: npm test
