@@ -1,0 +1,53 @@
+name: Agent gateway environment smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-gateway:
+    timeout-minutes: 3
+    agent:
+      mcp-servers: []
+      prompt: |
+        Check whether this CI agent sandbox receives the gateway environment.
+        Run the following command and return its observed booleans as your outputs.
+        Missing variables are a valid test result. Do not invent or supply fallback
+        URLs. Do not print tokens, raw HTTP responses, or other environment variables.
+        Do not clone, modify files, or make GitHub requests.
+
+        python3 - <<'PY'
+        import json
+        import os
+        import urllib.request
+
+        gateway = os.environ.get("DEPOT_AGENT_GATEWAY_URL", "")
+        token_url = os.environ.get("DEPOT_AGENT_GATEWAY_TOKEN_URL", "")
+        result = {
+            "gateway_url_set": bool(gateway),
+            "gateway_token_url_set": bool(token_url),
+            "gateway_token_fetch_succeeded": False,
+        }
+        if token_url:
+            try:
+                with urllib.request.urlopen(token_url, timeout=10) as response:
+                    value = json.load(response).get("value")
+                result["gateway_token_fetch_succeeded"] = isinstance(value, str) and bool(value)
+                result["summary"] = "Identity token received." if result["gateway_token_fetch_succeeded"] else "No identity token returned."
+            except Exception as error:
+                result["summary"] = "Identity token request failed: " + type(error).__name__
+        else:
+            result["summary"] = "Gateway identity-token URL is absent."
+        print(json.dumps(result))
+        PY
+      outputs:
+        gateway_url_set:
+          type: boolean
+        gateway_token_url_set:
+          type: boolean
+        gateway_token_fetch_succeeded:
+          type: boolean
+        summary:
+          type: string

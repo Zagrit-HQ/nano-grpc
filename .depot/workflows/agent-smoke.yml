@@ -1,0 +1,41 @@
+name: Agent smoke test
+
+on:
+  push:
+    branches: [codex/agent-smoke]
+
+jobs:
+  smoke:
+    timeout-minutes: 5
+    agent:
+      mcp-servers: [knowledge-mcp]
+      prompt: |
+        Use the knowledge-mcp MCP server to search AWS documentation for
+        CloudWatch Logs Insights StartQuery. You must make an actual MCP tool call.
+        Return ok=true only if the tool call succeeds, and set documentation_url
+        to one https://docs.aws.amazon.com/ URL returned by the tool.
+        If the tools are unavailable, the call fails, or no documentation URL is
+        returned, set ok=false and documentation_url to an empty string.
+        Do not use shell commands, other network tools, or make file changes.
+      outputs:
+        ok:
+          type: boolean
+        documentation_url:
+          type: string
+
+  show-output:
+    needs: smoke
+    runs-on: depot-ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Validate and print MCP output
+        env:
+          SMOKE_OK: ${{ needs.smoke.outputs.ok }}
+          DOCUMENTATION_URL: ${{ needs.smoke.outputs.documentation_url }}
+        run: |
+          test "$SMOKE_OK" = true
+          case "$DOCUMENTATION_URL" in
+            https://docs.aws.amazon.com/*) ;;
+            *) echo "Expected an AWS documentation URL from MCP"; exit 1 ;;
+          esac
+          printf 'MCP documentation URL: %s\n' "$DOCUMENTATION_URL"
