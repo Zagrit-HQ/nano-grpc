@@ -1,0 +1,23 @@
+name: DEP-6280 stderr capture probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: depot-ubuntu-24.04-8
+    timeout-minutes: 5
+    steps:
+      - name: Ordinary stderr control
+        run: |
+          printf 'CONTROL first line\nCONTROL second line\n' >&2
+
+      - name: Raw-only stderr failure
+        # Invalid UTF-8 forces raw-only transport. Exit 1 also exercises failure diagnosis.
+        run: |
+          python3 - <<'PY'
+          import sys
+          sys.stderr.buffer.write(b"\xff HTTP 404: raw-stderr-probe\n")
+          sys.stderr.buffer.flush()
+          sys.exit(1)
+          PY
